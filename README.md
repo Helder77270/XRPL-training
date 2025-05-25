@@ -29,7 +29,7 @@ npm install
 
 3. Create a `.env` file in the root directory and add your XRPL node URL:
 ```env
-NEXT_PUBLIC_XRPL_RPC_URL=wss://s.altnet.rippletest.net:51233/
+VITE_APP_XRPL_RPC_URL=wss://s.altnet.rippletest.net:51233/
 ```
 
 4. Start the development server:

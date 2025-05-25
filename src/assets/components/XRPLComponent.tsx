@@ -33,7 +33,7 @@ export const XRPLProvider: React.FC<XRPLProviderProps> = ({ children }) => {
 
   useEffect(() => {
     const initClient = async () => {
-      const c = new Client(process.env.NEXT_PUBLIC_XRPL_RPC_URL!);
+      const c = new Client(import.meta.env.VITE_APP_XRPL_RPC_URL!);
       await c.connect();
       setClient(c);
     };
