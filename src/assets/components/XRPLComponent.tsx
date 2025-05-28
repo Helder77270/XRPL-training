@@ -1,90 +1,56 @@
+// src/components/xrpl/XRPLComponents.tsx
+import '../../styles/web3.css';
 import React, { useState, useEffect } from 'react';
-import type { ReactNode } from 'react';
+import type { ChangeEvent, ReactNode } from 'react';
 import { Client, Wallet, xrpToDrops } from 'xrpl';
 import type { EscrowCreate } from 'xrpl/dist/npm/models/transactions';
-
-// UI components
-import { Card, CardHeader, CardTitle, CardContent } from '../ui/card';
-import { Button } from '../ui/button';
-import { Input } from '../ui/input';
-import { Label } from '../ui/label';
 
 // Context type
 interface XRPLContextType {
   client: Client | null;
   wallet: Wallet | null;
-  setWallet: (wallet: Wallet) => void;
+  setWallet: (wallet: Wallet | null) => void;
 }
-
-// Create context
 const XRPLContext = React.createContext<XRPLContextType | undefined>(undefined);
 
-// Provider props
-interface XRPLProviderProps {
-  children: ReactNode;
-}
-
-// Add type for change event
-type ChangeEvent = React.ChangeEvent<HTMLInputElement>;
-
-// XRPLProvider component
+interface XRPLProviderProps { children: ReactNode }
 export const XRPLProvider: React.FC<XRPLProviderProps> = ({ children }) => {
   const [client, setClient] = useState<Client | null>(null);
   const [wallet, setWallet] = useState<Wallet | null>(null);
-  const [isConnecting, setIsConnecting] = useState(true);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const initClient = async () => {
+    (async () => {
       try {
-        setIsConnecting(true);
-        if (!import.meta.env.VITE_APP_XRPL_RPC_URL) {
-          throw new Error('XRPL RPC URL not configured. Please check your .env file.');
-        }
-        const c = new Client(import.meta.env.VITE_APP_XRPL_RPC_URL);
+        const url = import.meta.env.VITE_APP_XRPL_RPC_URL!;
+        const c = new Client(url);
         await c.connect();
         setClient(c);
-        setError(null);
-      } catch (err: any) {
-        setError(`Failed to connect: ${err.message}`);
-        console.error("Failed to connect to XRPL:", err);
+      } catch (e: any) {
+        setError(`Failed to connect: ${e.message}`);
       } finally {
-        setIsConnecting(false);
+        setLoading(false);
       }
-    };
-
-    initClient();
-    return () => {
-      if (client) {
-        client.disconnect();
-      }
-    };
+    })();
+    return () => { client?.disconnect(); };
   }, []);
 
-  if (isConnecting) {
+  if (loading) {
     return (
-      <Card className="max-w-md mx-auto mt-6">
-        <CardContent className="py-4">
-          <div className="text-center">
-            <p>Connecting to XRPL Testnet...</p>
-          </div>
-        </CardContent>
-      </Card>
+      <div className="web3-card">
+        <div className="loader" />
+        <p className="web3-label neon-text text-center">Connecting to XRPL Testnet...</p>
+      </div>
     );
   }
-
   if (error) {
     return (
-      <Card className="max-w-md mx-auto mt-6">
-        <CardContent className="py-4">
-          <div className="text-center text-red-500">
-            <p>{error}</p>
-          </div>
-        </CardContent>
-      </Card>
+      <div className="web3-card">
+        <p className="web3-label" style={{ color: 'var(--color-accent)' }}>{error}</p>
+      </div>
     );
   }
-
   return (
     <XRPLContext.Provider value={{ client, wallet, setWallet }}>
       {children}
@@ -92,244 +58,173 @@ export const XRPLProvider: React.FC<XRPLProviderProps> = ({ children }) => {
   );
 };
 
-
-
-// ConnectWallet component
-export const ConnectWallet: React.FC<{}> = () => {
-  const context = React.useContext(XRPLContext);
-  if (!context) throw new Error('ConnectWallet must be used within XRPLProvider');
-
-  const { wallet, setWallet } = context;
+// ConnectWallet
+export const ConnectWallet: React.FC = () => {
+  const ctx = React.useContext(XRPLContext);
+  if (!ctx) throw new Error('Used outside XRPLProvider');
+  const { wallet, setWallet } = ctx;
   const [seed, setSeed] = useState('');
-  const [error, setError] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
 
-  const connectWallet = () => {
+  const connect = () => {
     try {
-      const w = Wallet.fromSeed(seed);
-      setWallet(w);
-      setError(null);
+      setWallet(Wallet.fromSeed(seed));
+      setErr(null);
+      setSeed('');
     } catch {
-      setError('Invalid seed');
+      setErr('Invalid seed');
     }
+  };
+  const disconnect = () => {
+    setWallet(null);
+    setErr(null);
   };
 
   return (
-    <Card className="max-w-md mx-auto mt-6">
-      <CardHeader>
-        <CardTitle>Connect XRPL Wallet</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        {wallet ? (
-          <div>
-            <p className="font-medium">Connected Address:</p>
-            <p className="text-sm text-gray-700 truncate">{wallet.address}</p>
-          </div>
-        ) : (
-          <>
-            <div>
-              <Label htmlFor="seed">Wallet Seed</Label>
-              <Input
-                id="seed"
-                value={seed}
-                onChange={(e: ChangeEvent) => setSeed(e.target.value)}
-                placeholder="s████████████████████████████"
-              />
-            </div>
-            {error && <p className="text-red-500 text-sm">{error}</p>}
-            <Button onClick={connectWallet}>Connect</Button>
-          </>
-        )}
-      </CardContent>
-    </Card>
+    <div className="web3-card">
+      <h3 className="neon-text">Connect XRPL Wallet</h3>
+      {wallet ? (
+        <>
+          <label className="web3-label">Address</label>
+          <div className="web3-input" style={{ cursor: 'default' }}>{wallet.address}</div>
+          <button className="web3-button" onClick={disconnect}>Disconnect</button>
+        </>
+      ) : (
+        <>
+          <label htmlFor="seed" className="web3-label">Wallet Seed</label>
+          <input
+            id="seed" type="password"
+            className="web3-input"
+            value={seed} onChange={(e: ChangeEvent<HTMLInputElement>) => setSeed(e.target.value)}
+            placeholder="s████████████████████████████"
+          />
+          {err && <p className="web3-label" style={{ color: 'var(--color-accent)' }}>{err}</p>}
+          <button className="web3-button" onClick={connect}>Connect Wallet</button>
+        </>
+      )}
+    </div>
   );
 };
 
-// EscrowTransaction component
-export const EscrowTransaction: React.FC<{}> = () => {
-  const context = React.useContext(XRPLContext);
-  if (!context) throw new Error('EscrowTransaction must be used within XRPLProvider');
-
-  const { client, wallet } = context;
-  const [destination, setDestination] = useState('');
+// EscrowTransaction
+export const EscrowTransaction: React.FC = () => {
+  const ctx = React.useContext(XRPLContext);
+  if (!ctx) throw new Error('Used outside XRPLProvider');
+  const { client, wallet } = ctx;
+  const [dest, setDest] = useState('');
   const [amount, setAmount] = useState('');
-  const [cancelAfter, setCancelAfter] = useState('');
-  const [finishAfter, setFinishAfter] = useState('');
-  const [status, setStatus] = useState<string | null>(null);
-  const [txHash, setTxHash] = useState<string | null>(null);
+  const [finish, setFinish] = useState('');
+  const [cancel, setCancel] = useState('');
+  const [status, setStatus] = useState<string|null>(null);
+  const [txHash, setTxHash] = useState<string|null>(null);
 
-  const validateAmount = (value: string) => {
-    // Allow only numbers and decimal point
-    const regex = /^\d*\.?\d*$/;
-    if (regex.test(value) || value === '') {
-      setAmount(value);
-    }
-  };
-
-  const createEscrow = async () => {
-    if (!client || !wallet) {
-      setStatus('Client or wallet not initialized');
-      return;
-    }
-
-    if (!amount || parseFloat(amount) <= 0) {
-      setStatus('Please enter a valid amount');
-      return;
-    }
-
+  const create = async () => {
+    if (!client || !wallet) return setStatus('Init client & wallet');
+    if (!amount || parseFloat(amount) <= 0) return setStatus('Enter valid amount');
     try {
       const drops = xrpToDrops(amount);
-      const currentTime = Math.floor(Date.now() / 1000);
-      
+      const now = Math.floor(Date.now()/1000);
       const tx: EscrowCreate = {
         TransactionType: 'EscrowCreate',
         Account: wallet.address,
         Amount: drops,
-        Destination: destination,
-        CancelAfter: currentTime + parseInt(cancelAfter, 10),
-        FinishAfter: currentTime + parseInt(finishAfter, 10)
+        Destination: dest,
+        FinishAfter: now + parseInt(finish,10),
+        CancelAfter: now + parseInt(cancel,10)
       };
-
-      const prepared = await client.autofill(tx);
-      const signed = wallet.sign(prepared);
+      const prep = await client.autofill(tx);
+      const signed = wallet.sign(prep);
       const res = await client.submitAndWait(signed.tx_blob);
-      const meta = res.result.meta;
-      const result = typeof meta === 'object' && meta ? meta.TransactionResult : 'Unknown';
       setTxHash(res.result.hash);
-      setStatus(`Result: ${result}`);
+      const meta = res.result.meta;
+      setStatus(typeof meta === 'object' && meta && 'TransactionResult' in meta 
+        ? meta.TransactionResult as string 
+        : 'Unknown result');
     } catch (e: any) {
-      setStatus(`Error: ${e.data?.result?.engine_result || e.message}`);
+      setStatus(e.data?.result?.engine_result || e.message);
       setTxHash(null);
     }
   };
 
   return (
-    <Card className="max-w-md mx-auto mt-6">
-      <CardHeader>
-        <CardTitle>Create Escrow</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
+    <div className="web3-card">
+      <h3 className="neon-text">Create Escrow</h3>
+      <div className="grid lg-web3-grid-2 web3-grid">
         <div>
-          <Label htmlFor="destination">Destination Address</Label>
-          <Input
-            id="destination"
-            value={destination}
-            onChange={(e: ChangeEvent) => setDestination(e.target.value)}
-            placeholder="rDESTINATION..."
-          />
+          <label className="web3-label">Destination</label>
+          <input className="web3-input" value={dest} onChange={e=>setDest(e.target.value)} placeholder="rDEST..." />
         </div>
         <div>
-          <Label htmlFor="amount">Amount (XRP)</Label>
-          <Input
-            id="amount"
-            value={amount}
-            onChange={(e: ChangeEvent) => setAmount(e.target.value)}
-            placeholder="10"
-          />
+          <label className="web3-label">Amount (XRP)</label>
+          <input className="web3-input" value={amount} onChange={e=>setAmount(e.target.value)} placeholder="10" />
+        </div>
+      </div>
+      <div className="grid lg-web3-grid-2 web3-grid">
+        <div>
+          <label className="web3-label">Finish After (s)</label>
+          <input className="web3-input" value={finish} onChange={e=>setFinish(e.target.value)} placeholder="1800" />
         </div>
         <div>
-          <Label htmlFor="finishAfter">Finish After (seconds)</Label>
-          <Input
-            id="finishAfter"
-            value={finishAfter}
-            onChange={(e: ChangeEvent) => setFinishAfter(e.target.value)}
-            placeholder="1800"
-          />
-          <p className="text-sm text-gray-500 mt-1">Time before escrow can be finished (e.g., 1800 for 30 minutes)</p>
+          <label className="web3-label">Cancel After (s)</label>
+          <input className="web3-input" value={cancel} onChange={e=>setCancel(e.target.value)} placeholder="3600" />
         </div>
-        <div>
-          <Label htmlFor="cancelAfter">Cancel After (seconds)</Label>
-          <Input
-            id="cancelAfter"
-            value={cancelAfter}
-            onChange={(e: ChangeEvent) => setCancelAfter(e.target.value)}
-            placeholder="3600"
-          />
-          <p className="text-sm text-gray-500 mt-1">Time after which escrow can be cancelled (e.g., 3600 for 1 hour)</p>
-        </div>
-        <Button onClick={createEscrow} disabled={!client || !wallet || !amount || !destination || !finishAfter}>
-          Create Escrow
-        </Button>
-        {status && (
-          <div className="mt-4 space-y-2">
-            <p className="text-sm">{status}</p>
-            {txHash && (
-              <a
-                href={`https://testnet.xrpl.org/transactions/${txHash}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-sm text-blue-500 hover:text-blue-600 underline"
-              >
-                View on XRPL Testnet Explorer
-              </a>
-            )}
-          </div>
-        )}
-      </CardContent>
-    </Card>
+      </div>
+      <button className="web3-button" onClick={create} disabled={!wallet || !client}>Submit Escrow</button>
+      {status && <p className="web3-label" style={{marginTop:'1rem'}}>{status}</p>}
+      {txHash && (
+        <>
+          <p className="web3-label neon-text">Txn Hash: {txHash}</p>
+          <a
+            href={`https://testnet.xrpl.org/transactions/${txHash}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="web3-label neon-text"
+            style={{ textDecoration: 'underline', cursor: 'pointer', display: 'block', marginTop: '0.5rem' }}
+          >
+            View on XRPL Testnet Explorer →
+          </a>
+        </>
+      )}
+    </div>
   );
 };
 
-// TestnetWallet component
-export const TestnetWallet: React.FC<{}> = () => {
-  const context = React.useContext(XRPLContext);
-  if (!context) throw new Error('TestnetWallet must be used within XRPLProvider');
+// TestnetWallet
+export const TestnetWallet: React.FC = () => {
+  const ctx = React.useContext(XRPLContext);
+  if (!ctx) throw new Error('Used outside XRPLProvider');
+  const { client, setWallet } = ctx;
+  const [status, setStatus] = useState<string|null>(null);
 
-  const { client, setWallet } = context;
-  const [status, setStatus] = useState<string | null>(null);
-
-  const generateWallet = async () => {
-    if (!client) {
-      setStatus('Client not initialized');
-      return;
-    }
-
+  const gen = async () => {
+    if (!client) return setStatus('Client not ready');
     try {
-      setStatus('Generating wallet...');
-      // Generate a new wallet
-      const fund_result = await client.fundWallet();
-      const new_wallet = fund_result.wallet;
-      
-      // Set the wallet in context
-      setWallet(new_wallet);
-      
-      setStatus(`Wallet generated and funded!\nAddress: ${new_wallet.address}\nSeed: ${new_wallet.seed}\nBalance: ${fund_result.balance} XRP`);
-    } catch (error: any) {
-      setStatus(`Error: ${error.message}`);
-    }
+      setStatus('Generating...');
+      const { wallet: w, balance } = await client.fundWallet();
+      setWallet(w);
+      setStatus(`Addr: ${w.address}\nSeed: ${w.seed}\nBalance: ${balance}`);
+    } catch(e:any) { setStatus(e.message); }
   };
 
   return (
-    <Card className="max-w-md mx-auto mt-6">
-      <CardHeader>
-        <CardTitle>Generate Testnet Wallet</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <Button 
-          onClick={generateWallet} 
-          disabled={!client}
-          className="w-full"
-        >
-          Generate New Testnet Wallet
-        </Button>
-        {status && (
-          <div className="mt-4 p-4 bg-gray-50 rounded-lg whitespace-pre-wrap">
-            <pre className="text-sm">{status}</pre>
-          </div>
-        )}
-      </CardContent>
-    </Card>
+    <div className="web3-card">
+      <h3 className="neon-text">Generate Test Wallet</h3>
+      <button className="web3-button" onClick={gen} disabled={!client}>Generate</button>
+      {status && <pre className="web3-label" style={{whiteSpace:'pre-wrap'}}>{status}</pre>}
+    </div>
   );
 };
 
-// Main component that combines all XRPL components
-export const MainXRPLComponent: React.FC = () => {
-  return (
-    <XRPLProvider>
-      <div className="container mx-auto p-4 space-y-6">
+// MainXRPLComponent
+export const MainXRPLComponent: React.FC = () => (
+  <XRPLProvider>
+    <div className="container mx-auto p-8 web3-grid lg-web3-grid-2">
+      <div>
         <TestnetWallet />
+        <div className="hover-glow"></div>
         <ConnectWallet />
-        <EscrowTransaction />
       </div>
-    </XRPLProvider>
-  );
-};
+      <EscrowTransaction />
+    </div>
+  </XRPLProvider>
+);
